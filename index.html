@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>お買い物サポート (Shopping Assist)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Noto Sans JP -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700;900&display=swap" rel="stylesheet">
+  <style>
+    /* 全体の基本スタイル・高コントラストダークモード */
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background-color: #0f172a;
+      color: #ffffff;
+      font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    /* 店員呼び出し時の画面点滅アニメーション（ライムグリーンとイエロー） */
+    @keyframes staffAlertFlash {
+      0%, 100% {
+        background-color: #0f172a;
+      }
+      20%, 60% {
+        background-color: #a3e635;
+      }
+      40%, 80% {
+        background-color: #facc15;
+      }
+    }
+
+    .alert-flashing {
+      animation: staffAlertFlash 1.8s ease-in-out 2;
+    }
+
+    /* 音声認識中のボタンアニメーション */
+    @keyframes micPulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(163, 230, 53, 0.8);
+      }
+      50% {
+        box-shadow: 0 0 0 14px rgba(163, 230, 53, 0);
+      }
+    }
+
+    .mic-listening {
+      animation: micPulse 1.4s infinite;
+      background-color: #a3e635 !important;
+      color: #0f172a !important;
+    }
+
+    /* ボタンの押し込み感 */
+    .btn-tactile:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen bg-[#0f172a] text-white overflow-x-hidden">
+
+  <!-- =========================================================
+       上部ナビゲーションバー（3つの大きな切り替えタブ）
+       ========================================================= -->
+  <header class="w-full bg-[#090d16] border-b-4 border-[#facc15] px-3 py-3 sm:px-6 sm:py-4 shrink-0 z-20">
+    <nav aria-label="メインメニュー" class="max-w-5xl mx-auto grid grid-cols-3 gap-2 sm:gap-4" role="tablist">
+      <!-- タブ1 -->
+      <button
+        id="tab-btn-1"
+        role="tab"
+        aria-selected="true"
+        aria-controls="panel-1"
+        onclick="switchTab(1)"
+        class="btn-tactile min-h-[60px] sm:min-h-[72px] px-2 py-2 rounded-2xl text-base sm:text-2xl font-black border-4 transition-colors flex items-center justify-center text-center leading-tight bg-[#facc15] text-black border-white shadow-lg"
+      >
+        1. 店員呼び出し
+      </button>
+
+      <!-- タブ2 -->
+      <button
+        id="tab-btn-2"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-2"
+        onclick="switchTab(2)"
+        class="btn-tactile min-h-[60px] sm:min-h-[72px] px-2 py-2 rounded-2xl text-base sm:text-2xl font-black border-4 transition-colors flex items-center justify-center text-center leading-tight bg-slate-800 text-white border-slate-500 hover:border-[#facc15]"
+      >
+        2. 希望を伝える
+      </button>
+
+      <!-- タブ3 -->
+      <button
+        id="tab-btn-3"
+        role="tab"
+        aria-selected="false"
+        aria-controls="panel-3"
+        onclick="switchTab(3)"
+        class="btn-tactile min-h-[60px] sm:min-h-[72px] px-2 py-2 rounded-2xl text-base sm:text-2xl font-black border-4 transition-colors flex items-center justify-center text-center leading-tight bg-slate-800 text-white border-slate-500 hover:border-[#facc15]"
+      >
+        3. 徒歩ナビ(地図)
+      </button>
+    </nav>
+  </header>
+
+  <!-- スクリーンリーダー用ライブ通知領域 -->
+  <div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- =========================================================
+       メインコンテンツ領域（見出しが見切れないよう十分な上部余白を確保）
+       ========================================================= -->
+  <main id="main-container" class="flex-1 flex flex-col justify-between w-full max-w-5xl mx-auto px-4 pt-6 pb-4 sm:px-8 sm:pt-8 sm:pb-6">
+
+    <!-- *******************************************************
+         タブ1：1. 店員呼び出し
+         ******************************************************* -->
+    <section
+      id="panel-1"
+      role="tabpanel"
+      aria-labelledby="tab-btn-1"
+      onclick="triggerStaffCall()"
+      class="flex-1 flex flex-col items-center justify-center text-center cursor-pointer rounded-3xl p-4 sm:p-8 transition-colors"
+    >
+      <!-- 通常時の表示 -->
+      <div id="call-standby-view" class="w-full max-w-3xl mx-auto space-y-5 sm:space-y-7">
+        <h1 class="text-3xl sm:text-5xl md:text-6xl font-black text-[#facc15] leading-snug tracking-tight">
+          画面のどこかを<br>
+          タッチして<br>
+          店員さんを呼ぶ
+        </h1>
+
+        <p class="text-lg sm:text-2xl md:text-3xl font-bold text-white leading-relaxed">
+          「ピン・ポーン♪」3回と画面点滅で<br>
+          静かに店員さんにお知らせします
+        </p>
+
+        <div class="pt-2">
+          <button
+            type="button"
+            onclick="event.stopPropagation(); triggerStaffCall();"
+            class="btn-tactile inline-flex items-center justify-center gap-3 px-8 py-5 sm:px-14 sm:py-7 rounded-3xl bg-[#a3e635] hover:bg-[#bef264] text-black text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl"
+          >
+            <span aria-hidden="true">🔔</span>
+            <span>タッチして呼び出す</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 呼び出し中の店員向け視覚カード（高コントラスト） -->
+      <div id="call-active-view" class="hidden w-full max-w-3xl mx-auto space-y-5">
+        <div class="p-6 sm:p-10 rounded-3xl bg-white text-black border-8 border-[#facc15] shadow-2xl space-y-4">
+          <div class="inline-block px-5 py-2 rounded-xl bg-black text-[#a3e635] text-xl sm:text-2xl font-black">
+            🔔 呼び出し中（3連チャイム作動）
+          </div>
+          <h2 class="text-3xl sm:text-5xl font-black leading-tight text-black">
+            お手伝いをお願いします<br>
+            <span class="text-2xl sm:text-4xl text-slate-800">（店員さんへ）</span>
+          </h2>
+          <p class="text-xl sm:text-3xl font-bold text-slate-900 leading-relaxed">
+            目が不自由なため、セルフレジの操作サポートをお願いいたします。
+          </p>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            type="button"
+            onclick="event.stopPropagation(); triggerStaffCall();"
+            class="btn-tactile px-8 py-4 rounded-2xl bg-[#a3e635] text-black text-xl sm:text-2xl font-black border-4 border-white shadow-lg"
+          >
+            🔔 もう一度チャイムを鳴らす
+          </button>
+          <button
+            type="button"
+            onclick="event.stopPropagation(); resetStaffCall();"
+            class="btn-tactile px-8 py-4 rounded-2xl bg-slate-800 text-white text-xl sm:text-2xl font-black border-4 border-slate-400 shadow-lg"
+          >
+            元の画面にもどす
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- *******************************************************
+         タブ2：2. 希望を伝える
+         ******************************************************* -->
+    <section
+      id="panel-2"
+      role="tabpanel"
+      aria-labelledby="tab-btn-2"
+      class="hidden flex-1 flex flex-col justify-between space-y-5"
+    >
+      <!-- 最上部：店員さんへの丁寧なメッセージ（左揃えで視認性最大化） -->
+      <div class="w-full p-5 sm:p-6 rounded-3xl bg-[#facc15] text-black border-4 border-white shadow-xl text-left">
+        <p class="text-2xl sm:text-4xl font-black leading-snug tracking-tight">
+          ⭐️ 付き添っていただけると幸いです。
+        </p>
+      </div>
+
+      <!-- 店員さんに見せる大きなまとめカード＆読み上げボタン -->
+      <div class="w-full p-5 sm:p-7 rounded-3xl bg-slate-900 border-4 border-[#a3e635] shadow-xl space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-left">
+          <div class="p-4 rounded-2xl bg-black/70 border-2 border-slate-600">
+            <div class="text-base sm:text-lg font-bold text-[#facc15]">レジ袋</div>
+            <div id="summary-bags" class="text-2xl sm:text-3xl font-black text-white mt-1">不要 (0枚)</div>
+          </div>
+          <div class="p-4 rounded-2xl bg-black/70 border-2 border-slate-600">
+            <div class="text-base sm:text-lg font-bold text-[#facc15]">お支払い方法</div>
+            <div id="summary-payment" class="text-2xl sm:text-3xl font-black text-[#a3e635] mt-1">現金</div>
+          </div>
+          <div class="p-4 rounded-2xl bg-black/70 border-2 border-slate-600">
+            <div class="text-base sm:text-lg font-bold text-[#facc15]">お釣り・レシート</div>
+            <div id="summary-change" class="text-2xl sm:text-3xl font-black text-white mt-1">お釣りは手渡し希望</div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onclick="speakPreferences()"
+          class="btn-tactile w-full min-h-[68px] py-4 px-6 rounded-2xl bg-[#a3e635] hover:bg-[#bef264] text-black text-2xl sm:text-3xl font-black border-4 border-white shadow-lg flex items-center justify-center gap-3"
+        >
+          <span aria-hidden="true">🔊</span>
+          <span>希望を音声で読み上げる</span>
+        </button>
+      </div>
+
+      <!-- 希望の選択ボタン群（localStorageに自動保存） -->
+      <div class="space-y-4">
+        <!-- 1. レジ袋 -->
+        <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border-2 border-slate-600 space-y-3">
+          <h2 class="text-xl sm:text-2xl font-black text-[#facc15]">レジ袋の枚数</h2>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3" role="radiogroup" aria-label="レジ袋の枚数">
+            <button type="button" data-bag="不要 (0枚)" onclick="selectBag('不要 (0枚)')" class="bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">不要 (0枚)</button>
+            <button type="button" data-bag="1枚" onclick="selectBag('1枚')" class="bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">1枚</button>
+            <button type="button" data-bag="2枚" onclick="selectBag('2枚')" class="bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">2枚</button>
+            <button type="button" data-bag="3枚" onclick="selectBag('3枚')" class="bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">3枚</button>
+          </div>
+        </div>
+
+        <!-- 2. お支払い方法 -->
+        <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border-2 border-slate-600 space-y-3">
+          <h2 class="text-xl sm:text-2xl font-black text-[#facc15]">お支払い方法</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3" role="radiogroup" aria-label="お支払い方法">
+            <button type="button" data-pay="現金" onclick="selectPayment('現金')" class="pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">現金</button>
+            <button type="button" data-pay="カード" onclick="selectPayment('カード')" class="pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">カード</button>
+            <button type="button" data-pay="電子マネー・QR" onclick="selectPayment('電子マネー・QR')" class="pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">電子マネー・QR</button>
+          </div>
+        </div>
+
+        <!-- 3. お釣り・レシート -->
+        <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border-2 border-slate-600 space-y-3">
+          <h2 class="text-xl sm:text-2xl font-black text-[#facc15]">お釣り・レシートの受け取り</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3" role="radiogroup" aria-label="お釣り・レシートの受け取り">
+            <button type="button" data-change="お釣りは手渡し希望" onclick="selectChange('お釣りは手渡し希望')" class="change-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">お釣りは手渡し希望</button>
+            <button type="button" data-change="通常通り" onclick="selectChange('通常通り')" class="change-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">通常通り</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- *******************************************************
+         タブ3：3. 徒歩ナビ(地図)
+         ******************************************************* -->
+    <section
+      id="panel-3"
+      role="tabpanel"
+      aria-labelledby="tab-btn-3"
+      class="hidden flex-1 flex flex-col justify-center space-y-5"
+    >
+      <div class="p-5 sm:p-7 rounded-3xl bg-slate-900 border-4 border-[#a3e635] space-y-3">
+        <h1 class="text-2xl sm:text-4xl font-black text-[#a3e635]">
+          🗺️ Googleマップ 徒歩音声ナビ
+        </h1>
+        <p class="text-lg sm:text-2xl font-bold text-white leading-relaxed">
+          ボタンを押すとGoogleマップの徒歩モードが起動し、音声案内で目的地まで誘導します。
+        </p>
+      </div>
+
+      <!-- プリセット目的地ボタン -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <button
+          type="button"
+          onclick="setPresetDestination('近くのスーパー')"
+          class="btn-tactile min-h-[76px] p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-2xl sm:text-3xl font-black border-4 border-[#facc15] shadow-lg flex items-center justify-center gap-2"
+        >
+          <span>🏪 近くのスーパーへ行く</span>
+        </button>
+
+        <button
+          type="button"
+          onclick="handleGoHomePreset()"
+          class="btn-tactile min-h-[76px] p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-2xl sm:text-3xl font-black border-4 border-[#facc15] shadow-lg flex items-center justify-center gap-2"
+        >
+          <span>🏠 自宅へ帰る</span>
+        </button>
+      </div>
+
+      <!-- 目的地入力＆音声入力 -->
+      <div class="p-5 sm:p-6 rounded-3xl bg-slate-900 border-4 border-slate-600 space-y-3">
+        <label for="destination-input" class="block text-xl sm:text-2xl font-black text-[#facc15]">
+          目的地（自宅の住所・駅名・お店の名前）
+        </label>
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input
+            id="destination-input"
+            type="text"
+            placeholder="例：近くのスーパー / 自宅の住所"
+            class="flex-1 min-h-[64px] px-4 py-3 rounded-2xl bg-black text-white text-xl sm:text-2xl font-bold border-4 border-slate-500 focus:border-[#a3e635] focus:outline-none"
+          />
+          <button
+            type="button"
+            onclick="startVoiceDestinationInput()"
+            class="btn-tactile min-h-[64px] px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-[#facc15] text-xl sm:text-2xl font-black border-4 border-[#facc15] shrink-0"
+          >
+            🎤 声で目的地を入力
+          </button>
+        </div>
+      </div>
+
+      <!-- Googleマップ起動ボタン＆直接リンク -->
+      <div class="space-y-3">
+        <button
+          type="button"
+          onclick="openGoogleMapsWalking()"
+          class="btn-tactile w-full min-h-[84px] p-5 rounded-3xl bg-[#a3e635] hover:bg-[#bef264] text-black text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl flex items-center justify-center gap-3"
+        >
+          <span>🗺️ Googleマップで徒歩ナビ開始</span>
+        </button>
+
+        <div class="text-center pt-1">
+          <a
+            id="direct-maps-link"
+            href="https://www.google.com/maps/dir/?api=1&destination=%E8%BF%91%E3%81%8F%E3%81%AE%E3%82%B9%E3%83%BC%E3%83%91%E3%83%BC&travelmode=walking"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-block px-5 py-2.5 rounded-xl bg-slate-800 text-[#facc15] underline text-lg sm:text-xl font-bold border-2 border-slate-600 hover:border-[#facc15]"
+          >
+            別タブでGoogleマップを直接開く（テスト用リンク）
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =========================================================
+       下部コントロールバー：中央配置の大きな黄色ボタンのみ（右側の小文字なし）
+       ========================================================= -->
+  <footer class="w-full bg-[#090d16] border-t-4 border-[#facc15] px-4 py-3 sm:px-8 sm:py-4 shrink-0 z-20">
+    <div class="max-w-5xl mx-auto">
+      <button
+        id="voice-control-btn"
+        type="button"
+        onclick="toggleVoiceRecognition()"
+        aria-label="音声で操作する"
+        class="btn-tactile w-full min-h-[70px] sm:min-h-[80px] px-6 py-4 rounded-2xl bg-[#facc15] hover:bg-yellow-300 text-black text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl flex items-center justify-center gap-3 transition-colors"
+      >
+        <span id="voice-btn-icon" aria-hidden="true">🎤</span>
+        <span id="voice-btn-text">音声で操作する</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- =========================================================
+       JavaScript：チャイム音・音声合成・音声認識・設定保存・マップ連携
+       ========================================================= -->
+  <script>
+    // --- localStorage 保存キー ---
+    const KEYS = {
+      BAGS: 'sa_pref_bags_v1',
+      PAY: 'sa_pref_payment_v1',
+      CHANGE: 'sa_pref_change_v1',
+      HOME: 'sa_home_address_v1',
+      DEST: 'sa_last_dest_v1'
+    };
+
+    // --- アプリの状態 ---
+    let state = {
+      activeTab: 1,
+      bags: '不要 (0枚)',
+      payment: '現金',
+      change: 'お釣りは手渡し希望',
+      homeAddress: '',
+      destination: '近くのスーパー'
+    };
+
+    // --- 初期化処理 ---
+    window.addEventListener('DOMContentLoaded', () => {
+      loadPreferences();
+      updatePreferenceUI();
+      updateMapsLink();
+    });
+
+    function loadPreferences() {
+      try {
+        const savedBags = localStorage.getItem(KEYS.BAGS);
+        const savedPay = localStorage.getItem(KEYS.PAY);
+        const savedChange = localStorage.getItem(KEYS.CHANGE);
+        const savedHome = localStorage.getItem(KEYS.HOME);
+        const savedDest = localStorage.getItem(KEYS.DEST);
+
+        if (savedBags) state.bags = savedBags;
+        if (savedPay) state.payment = savedPay;
+        if (savedChange) state.change = savedChange;
+        if (savedHome) state.homeAddress = savedHome;
+        if (savedDest) state.destination = savedDest;
+
+        const destInput = document.getElementById('destination-input');
+        if (destInput) {
+          destInput.value = state.destination;
+          destInput.addEventListener('input', (e) => {
+            state.destination = e.target.value;
+            localStorage.setItem(KEYS.DEST, state.destination);
+            updateMapsLink();
+          });
+        }
+      } catch (e) {
+        console.warn('localStorageの読み込みに失敗しました:', e);
+      }
+    }
+
+    // --- 音声読み上げ（SpeechSynthesis API） ---
+    function speakText(text) {
+      const srLive = document.getElementById('sr-live');
+      if (srLive) srLive.textContent = text;
+
+      if (!('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = 'ja-JP';
+        utter.rate = 0.95;
+        utter.pitch = 1.0;
+        utter.volume = 1.0;
+        window.speechSynthesis.speak(utter);
+      } catch (e) {
+        console.warn('音声合成エラー:', e);
+      }
+    }
+
+    // --- タブ切り替え ---
+    function switchTab(tabNumber, announce = true) {
+      state.activeTab = tabNumber;
+
+      for (let i = 1; i <= 3; i++) {
+        const btn = document.getElementById(`tab-btn-${i}`);
+        const panel = document.getElementById(`panel-${i}`);
+        if (!btn || !panel) continue;
+
+        if (i === tabNumber) {
+          panel.classList.remove('hidden');
+          btn.setAttribute('aria-selected', 'true');
+          btn.className = 'btn-tactile min-h-[60px] sm:min-h-[72px] px-2 py-2 rounded-2xl text-base sm:text-2xl font-black border-4 transition-colors flex items-center justify-center text-center leading-tight bg-[#facc15] text-black border-white shadow-lg';
+        } else {
+          panel.classList.add('hidden');
+          btn.setAttribute('aria-selected', 'false');
+          btn.className = 'btn-tactile min-h-[60px] sm:min-h-[72px] px-2 py-2 rounded-2xl text-base sm:text-2xl font-black border-4 transition-colors flex items-center justify-center text-center leading-tight bg-slate-800 text-white border-slate-500 hover:border-[#facc15]';
+        }
+      }
+
+      if (announce) {
+        const messages = {
+          1: '1番、店員呼び出し画面です。画面のどこかをタッチするとチャイムが鳴ります。',
+          2: '2番、希望を伝える画面です。',
+          3: '3番、徒歩ナビ地図画面です。'
+        };
+        speakText(messages[tabNumber]);
+      }
+    }
+
+    // --- Web Audio API：3連チャイム（1046.5Hz C6 -> 1318.5Hz E6 -> 1046.5Hz C6） ---
+    let audioCtx = null;
+
+    function playThreeChimes() {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        if (!audioCtx) {
+          audioCtx = new AudioContextClass();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        // 騒がしい店内でもクリアに聞こえる約75-80dB相当のコンプレッサー＆ゲイン設定
+        const compressor = audioCtx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-14, audioCtx.currentTime);
+        compressor.knee.setValueAtTime(10, audioCtx.currentTime);
+        compressor.ratio.setValueAtTime(6, audioCtx.currentTime);
+        compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+        compressor.release.setValueAtTime(0.15, audioCtx.currentTime);
+
+        const masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(1.6, audioCtx.currentTime);
+
+        compressor.connect(masterGain);
+        masterGain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        // 3回チャイムを鳴らす（各回: C6 1046.5Hz -> E6 1318.5Hz -> C6 1046.5Hz）
+        for (let repeat = 0; repeat < 3; repeat++) {
+          const base = now + repeat * 1.15;
+          playTone(compressor, 1046.5, base, 0.25);        // C6
+          playTone(compressor, 1318.5, base + 0.26, 0.25); // E6
+          playTone(compressor, 1046.5, base + 0.52, 0.48); // C6（余韻長め）
+        }
+      } catch (e) {
+        console.warn('チャイム再生エラー:', e);
+      }
+    }
+
+    function playTone(destinationNode, freq, startTime, duration) {
+      const oscMain = audioCtx.createOscillator();
+      const oscHarmonic = audioCtx.createOscillator();
+      const noteGain = audioCtx.createGain();
+      const harmGain = audioCtx.createGain();
+
+      oscMain.type = 'triangle';
+      oscMain.frequency.setValueAtTime(freq, startTime);
+
+      // 聞き取りやすさを高めるオクターブ上の倍音
+      oscHarmonic.type = 'sine';
+      oscHarmonic.frequency.setValueAtTime(freq * 2, startTime);
+      harmGain.gain.setValueAtTime(0.25, startTime);
+
+      noteGain.gain.setValueAtTime(0.001, startTime);
+      noteGain.gain.exponentialRampToValueAtTime(0.95, startTime + 0.02);
+      noteGain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+      oscMain.connect(noteGain);
+      oscHarmonic.connect(harmGain);
+      harmGain.connect(noteGain);
+      noteGain.connect(destinationNode);
+
+      oscMain.start(startTime);
+      oscHarmonic.start(startTime);
+      oscMain.stop(startTime + duration + 0.02);
+      oscHarmonic.stop(startTime + duration + 0.02);
+    }
+
+    // --- 店員呼び出しトリガー ---
+    function triggerStaffCall() {
+      if (state.activeTab !== 1) {
+        switchTab(1, false);
+      }
+
+      // 3連チャイム再生
+      playThreeChimes();
+
+      // バイブレーション（対応端末）
+      if ('vibrate' in navigator) {
+        try {
+          navigator.vibrate([250, 150, 250, 150, 400]);
+        } catch (e) {}
+      }
+
+      // 画面点滅（ライムグリーンとイエロー）
+      const bodyEl = document.body;
+      bodyEl.classList.remove('alert-flashing');
+      void bodyEl.offsetWidth; // リフローでアニメーション再起動
+      bodyEl.classList.add('alert-flashing');
+
+      // 店員向け視覚カード表示
+      document.getElementById('call-standby-view').classList.add('hidden');
+      document.getElementById('call-active-view').classList.remove('hidden');
+
+      // チャイム終了後に音声案内
+      setTimeout(() => {
+        speakText('店員さんを呼び出しています。そのままお待ちください。');
+      }, 3600);
+    }
+
+    function resetStaffCall() {
+      document.body.classList.remove('alert-flashing');
+      document.getElementById('call-active-view').classList.add('hidden');
+      document.getElementById('call-standby-view').classList.remove('hidden');
+      speakText('元の呼び出し画面にもどりました。');
+    }
+
+    // --- タブ2：希望設定の更新＆保存 ---
+    function selectBag(value) {
+      state.bags = value;
+      localStorage.setItem(KEYS.BAGS, value);
+      updatePreferenceUI();
+      speakText(`レジ袋、${value}に設定しました。`);
+    }
+
+    function selectPayment(value) {
+      state.payment = value;
+      localStorage.setItem(KEYS.PAY, value);
+      updatePreferenceUI();
+      speakText(`お支払い方法、${value}に設定しました。`);
+    }
+
+    function selectChange(value) {
+      state.change = value;
+      localStorage.setItem(KEYS.CHANGE, value);
+      updatePreferenceUI();
+      speakText(`お釣り・レシート、${value}に設定しました。`);
+    }
+
+    function updatePreferenceUI() {
+      document.getElementById('summary-bags').textContent = state.bags;
+      document.getElementById('summary-payment').textContent = state.payment;
+      document.getElementById('summary-change').textContent = state.change;
+
+      // レジ袋ボタンの選択状態
+      document.querySelectorAll('.bag-option').forEach((btn) => {
+        const isSelected = btn.getAttribute('data-bag') === state.bags;
+        btn.className = isSelected
+          ? 'bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-[#facc15] text-black border-white'
+          : 'bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-slate-800 text-white border-slate-500';
+      });
+
+      // 支払いボタンの選択状態
+      document.querySelectorAll('.pay-option').forEach((btn) => {
+        const isSelected = btn.getAttribute('data-pay') === state.payment;
+        btn.className = isSelected
+          ? 'pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-[#facc15] text-black border-white'
+          : 'pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-slate-800 text-white border-slate-500';
+      });
+
+      // お釣りボタンの選択状態
+      document.querySelectorAll('.change-option').forEach((btn) => {
+        const isSelected = btn.getAttribute('data-change') === state.change;
+        btn.className = isSelected
+          ? 'change-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-[#facc15] text-black border-white'
+          : 'change-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-slate-800 text-white border-slate-500';
+      });
+    }
+
+    function speakPreferences() {
+      const text = `付き添っていただけると幸いです。レジ袋は、${state.bags}。お支払い方法は、${state.payment}。お釣り・レシートは、${state.change}です。よろしくお願いいたします。`;
+      speakText(text);
+    }
+
+    // --- タブ3：徒歩ナビ（Googleマップ連携） ---
+    function setPresetDestination(dest) {
+      state.destination = dest;
+      const input = document.getElementById('destination-input');
+      if (input) input.value = dest;
+      localStorage.setItem(KEYS.DEST, dest);
+      updateMapsLink();
+      speakText(`目的地を、${dest}、に設定しました。`);
+    }
+
+    function handleGoHomePreset() {
+      const input = document.getElementById('destination-input');
+      const currentVal = input ? input.value.trim() : '';
+
+      // 既に自宅住所が保存されていればそれを使う
+      if (state.homeAddress) {
+        setPresetDestination(state.homeAddress);
+      } else if (currentVal && currentVal !== '近くのスーパー') {
+        state.homeAddress = currentVal;
+        localStorage.setItem(KEYS.HOME, currentVal);
+        setPresetDestination(currentVal);
+      } else {
+        setPresetDestination('自宅');
+        speakText('自宅へ帰るに設定しました。具体的な住所や最寄り駅を入力しておくとより正確に案内できます。');
+      }
+    }
+
+    function getGoogleMapsWalkingUrl() {
+      const input = document.getElementById('destination-input');
+      const dest = (input && input.value.trim()) ? input.value.trim() : '近くのスーパー';
+      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=walking`;
+    }
+
+    function updateMapsLink() {
+      const linkEl = document.getElementById('direct-maps-link');
+      if (linkEl) {
+        linkEl.href = getGoogleMapsWalkingUrl();
+      }
+    }
+
+    function openGoogleMapsWalking() {
+      const input = document.getElementById('destination-input');
+      const dest = (input && input.value.trim()) ? input.value.trim() : '近くのスーパー';
+      const url = getGoogleMapsWalkingUrl();
+
+      speakText(`${dest}まで、Googleマップの徒歩ナビを開始します。`);
+      setTimeout(() => {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }, 500);
+    }
+
+    // --- 音声コマンド認識（Web Speech API） ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let isListening = false;
+    let voiceInputTarget = 'command'; // 'command' | 'destination'
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        isListening = true;
+        const btn = document.getElementById('voice-control-btn');
+        const icon = document.getElementById('voice-btn-icon');
+        const text = document.getElementById('voice-btn-text');
+        btn.classList.add('mic-listening');
+        icon.textContent = '🔴';
+        text.textContent = voiceInputTarget === 'destination'
+          ? '目的地をお話しください…'
+          : '聞き取り中… 話してください';
+      };
+
+      recognition.onend = () => {
+        isListening = false;
+        const btn = document.getElementById('voice-control-btn');
+        const icon = document.getElementById('voice-btn-icon');
+        const text = document.getElementById('voice-btn-text');
+        btn.classList.remove('mic-listening');
+        icon.textContent = '🎤';
+        text.textContent = '音声で操作する';
+        voiceInputTarget = 'command';
+      };
+
+      recognition.onerror = (event) => {
+        isListening = false;
+        if (event.error !== 'aborted') {
+          speakText('うまく聞き取れませんでした。もう一度ボタンを押してお話しください。');
+        }
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.trim();
+
+        if (voiceInputTarget === 'destination') {
+          const input = document.getElementById('destination-input');
+          if (input) input.value = transcript;
+          state.destination = transcript;
+          state.homeAddress = transcript;
+          localStorage.setItem(KEYS.DEST, transcript);
+          localStorage.setItem(KEYS.HOME, transcript);
+          updateMapsLink();
+          speakText(`目的地を、${transcript}、に設定しました。`);
+          return;
+        }
+
+        processVoiceCommand(transcript);
+      };
+    }
+
+    function toggleVoiceRecognition() {
+      if (!recognition) {
+        speakText('このブラウザでは音声認識が利用できません。画面の大きなボタンで操作してください。');
+        return;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      voiceInputTarget = 'command';
+      try {
+        if (isListening) {
+          recognition.stop();
+        } else {
+          recognition.start();
+        }
+      } catch (e) {
+        console.warn('音声認識の起動エラー:', e);
+      }
+    }
+
+    function startVoiceDestinationInput() {
+      if (!recognition) {
+        speakText('音声入力に対応していないため、入力欄に直接文字を入力してください。');
+        return;
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      voiceInputTarget = 'destination';
+      try {
+        if (isListening) recognition.stop();
+        recognition.start();
+      } catch (e) {}
+    }
+
+    function processVoiceCommand(raw) {
+      const cmd = raw.replace(/\s+/g, '');
+
+      // 1. 店員呼び出し
+      if (cmd.includes('店員を呼ぶ') || cmd.includes('呼び出し') || cmd.includes('店員')) {
+        switchTab(1, false);
+        triggerStaffCall();
+        return;
+      }
+
+      // 2. 希望読み上げ
+      if (cmd.includes('希望') || cmd.includes('読み上げて') || cmd.includes('読み上げ')) {
+        switchTab(2, false);
+        speakPreferences();
+        return;
+      }
+
+      // 3. レジ袋設定
+      if (cmd.includes('レジ袋0枚') || cmd.includes('ゼロ枚') || cmd.includes('0枚') || cmd.includes('不要')) {
+        switchTab(2, false);
+        selectBag('不要 (0枚)');
+        return;
+      }
+      if (cmd.includes('レジ袋1枚') || cmd.includes('1枚') || cmd.includes('一枚')) {
+        switchTab(2, false);
+        selectBag('1枚');
+        return;
+      }
+      if (cmd.includes('レジ袋2枚') || cmd.includes('2枚') || cmd.includes('二枚')) {
+        switchTab(2, false);
+        selectBag('2枚');
+        return;
+      }
+      if (cmd.includes('レジ袋3枚') || cmd.includes('3枚') || cmd.includes('三枚')) {
+        switchTab(2, false);
+        selectBag('3枚');
+        return;
+      }
+
+      // 4. 支払い方法設定
+      if (cmd.includes('現金')) {
+        switchTab(2, false);
+        selectPayment('現金');
+        return;
+      }
+      if (cmd.includes('カード') || cmd.includes('クレジット')) {
+        switchTab(2, false);
+        selectPayment('カード');
+        return;
+      }
+      if (cmd.includes('電子マネー') || cmd.includes('QR') || cmd.includes('ペイペイ')) {
+        switchTab(2, false);
+        selectPayment('電子マネー・QR');
+        return;
+      }
+
+      // 5. 地図・徒歩ナビ
+      if (cmd.includes('地図') || cmd.includes('ナビ') || cmd.includes('スーパー')) {
+        switchTab(3, false);
+        if (cmd.includes('スーパー')) {
+          setPresetDestination('近くのスーパー');
+        }
+        openGoogleMapsWalking();
+        return;
+      }
+
+      speakText(`「${raw}」と聞こえました。「店員を呼ぶ」「希望を読み上げて」「レジ袋1枚」「現金」「地図」のように話しかけてください。`);
+    }
+
+    // --- 物理ボタン（ボリュームキー等）ダブルプッシュのテスト用キーボードショートカット ---
+    let lastKeyTime = 0;
+    let lastKey = '';
+
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+
+      const key = e.key;
+      const now = Date.now();
+
+      // 'v' キー単押し、または ArrowDown / ArrowUp を素早く2回押した場合
+      if (key === 'v' || key === 'V') {
+        e.preventDefault();
+        toggleVoiceRecognition();
+        return;
+      }
+
+      if ((key === 'ArrowDown' || key === 'ArrowUp') && key === lastKey && (now - lastKeyTime) < 500) {
+        e.preventDefault();
+        speakPreferences();
+        lastKeyTime = 0;
+      } else {
+        lastKey = key;
+        lastKeyTime = now;
+      }
+    });
+  </script>
+</body>
+</html>
