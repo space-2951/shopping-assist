@@ -23,36 +23,41 @@
       user-select: none;
     }
 
-    /* 店員呼び出し時の画面点滅アニメーション（ライムグリーンとイエロー） */
+    input {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    /* 店員呼び出し時の画面点滅アニメーション（ライムグリーン #84cc16 とイエロー #facc15） */
     @keyframes staffAlertFlash {
       0%, 100% {
         background-color: #0f172a;
       }
-      20%, 60% {
-        background-color: #a3e635;
+      25%, 75% {
+        background-color: #84cc16;
       }
-      40%, 80% {
+      50% {
         background-color: #facc15;
       }
     }
 
     .alert-flashing {
-      animation: staffAlertFlash 1.8s ease-in-out 2;
+      animation: staffAlertFlash 1.2s ease-in-out infinite;
     }
 
     /* 音声認識中のボタンアニメーション */
     @keyframes micPulse {
       0%, 100% {
-        box-shadow: 0 0 0 0 rgba(163, 230, 53, 0.8);
+        box-shadow: 0 0 0 0 rgba(132, 204, 22, 0.85);
       }
       50% {
-        box-shadow: 0 0 0 14px rgba(163, 230, 53, 0);
+        box-shadow: 0 0 0 16px rgba(132, 204, 22, 0);
       }
     }
 
     .mic-listening {
       animation: micPulse 1.4s infinite;
-      background-color: #a3e635 !important;
+      background-color: #84cc16 !important;
       color: #0f172a !important;
     }
 
@@ -102,16 +107,21 @@
         onclick="switchTab(3)"
         class="btn-tactile min-h-[60px] sm:min-h-[72px] px-2 py-2 rounded-2xl text-base sm:text-2xl font-black border-4 transition-colors flex items-center justify-center text-center leading-tight bg-slate-800 text-white border-slate-500 hover:border-[#facc15]"
       >
-        3. 徒歩ナビ(地図)
+        3. 徒歩ナビ
       </button>
     </nav>
   </header>
 
-  <!-- スクリーンリーダー用ライブ通知領域 -->
+  <!-- スクリーンリーダー＆音声フィードバック用ライブ通知領域 -->
   <div id="sr-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
+  <!-- 画面内トースト通知（alert()の代替） -->
+  <div id="toast-banner" class="hidden fixed top-24 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-2xl px-6 py-4 rounded-2xl bg-[#facc15] text-black text-xl sm:text-2xl font-black border-4 border-white shadow-2xl text-center">
+    <span id="toast-text"></span>
+  </div>
+
   <!-- =========================================================
-       メインコンテンツ領域（見出しが見切れないよう十分な上部余白を確保）
+       メインコンテンツ領域（見出しが見切れない十分な上部余白）
        ========================================================= -->
   <main id="main-container" class="flex-1 flex flex-col justify-between w-full max-w-5xl mx-auto px-4 pt-6 pb-4 sm:px-8 sm:pt-8 sm:pb-6">
 
@@ -122,70 +132,60 @@
       id="panel-1"
       role="tabpanel"
       aria-labelledby="tab-btn-1"
-      onclick="triggerStaffCall()"
-      class="flex-1 flex flex-col items-center justify-center text-center cursor-pointer rounded-3xl p-4 sm:p-8 transition-colors"
+      class="flex-1 flex flex-col items-center justify-center text-center rounded-3xl p-4 sm:p-8 transition-colors"
     >
       <!-- 通常時の表示 -->
-      <div id="call-standby-view" class="w-full max-w-3xl mx-auto space-y-5 sm:space-y-7">
+      <div id="call-standby-view" class="w-full max-w-3xl mx-auto space-y-6 sm:space-y-8">
         <h1 class="text-3xl sm:text-5xl md:text-6xl font-black text-[#facc15] leading-snug tracking-tight">
-          画面のどこかを<br>
-          タッチして<br>
-          店員さんを呼ぶ
+          店員さんをお願いします
         </h1>
 
         <p class="text-lg sm:text-2xl md:text-3xl font-bold text-white leading-relaxed">
-          「ピン・ポーン♪」3回と画面点滅で<br>
-          静かに店員さんにお知らせします
+          ボタンを押すと、3連チャイム音と画面点滅で<br>
+          周囲の店員さんにお知らせします
         </p>
 
         <div class="pt-2">
           <button
             type="button"
-            onclick="event.stopPropagation(); triggerStaffCall();"
-            class="btn-tactile inline-flex items-center justify-center gap-3 px-8 py-5 sm:px-14 sm:py-7 rounded-3xl bg-[#a3e635] hover:bg-[#bef264] text-black text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl"
+            onclick="startStaffCall()"
+            class="btn-tactile w-full sm:w-auto inline-flex items-center justify-center gap-4 px-8 py-6 sm:px-14 sm:py-8 rounded-3xl bg-[#84cc16] hover:bg-[#a3e635] text-black text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl"
           >
             <span aria-hidden="true">🔔</span>
-            <span>タッチして呼び出す</span>
+            <span>店員さんをお願いします</span>
           </button>
         </div>
       </div>
 
-      <!-- 呼び出し中の店員向け視覚カード（高コントラスト） -->
-      <div id="call-active-view" class="hidden w-full max-w-3xl mx-auto space-y-5">
+      <!-- 呼び出し中の店員向け視覚カード＆停止ボタン -->
+      <div id="call-active-view" class="hidden w-full max-w-3xl mx-auto space-y-6">
         <div class="p-6 sm:p-10 rounded-3xl bg-white text-black border-8 border-[#facc15] shadow-2xl space-y-4">
-          <div class="inline-block px-5 py-2 rounded-xl bg-black text-[#a3e635] text-xl sm:text-2xl font-black">
-            🔔 呼び出し中（3連チャイム作動）
+          <div class="inline-block px-5 py-2 rounded-xl bg-black text-[#84cc16] text-xl sm:text-2xl font-black">
+            🔔 呼び出し中（3連チャイム鳴動中）
           </div>
           <h2 class="text-3xl sm:text-5xl font-black leading-tight text-black">
-            お手伝いをお願いします<br>
-            <span class="text-2xl sm:text-4xl text-slate-800">（店員さんへ）</span>
+            店員さんをお願いします
           </h2>
           <p class="text-xl sm:text-3xl font-bold text-slate-900 leading-relaxed">
-            目が不自由なため、セルフレジの操作サポートをお願いいたします。
+            目が不自由なため、レジ操作のお手伝いをお願いいたします。
           </p>
         </div>
 
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <div>
           <button
             type="button"
-            onclick="event.stopPropagation(); triggerStaffCall();"
-            class="btn-tactile px-8 py-4 rounded-2xl bg-[#a3e635] text-black text-xl sm:text-2xl font-black border-4 border-white shadow-lg"
+            onclick="stopStaffCall()"
+            class="btn-tactile w-full sm:w-auto inline-flex items-center justify-center gap-3 px-10 py-6 sm:px-16 sm:py-7 rounded-3xl bg-red-600 hover:bg-red-500 text-white text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl"
           >
-            🔔 もう一度チャイムを鳴らす
-          </button>
-          <button
-            type="button"
-            onclick="event.stopPropagation(); resetStaffCall();"
-            class="btn-tactile px-8 py-4 rounded-2xl bg-slate-800 text-white text-xl sm:text-2xl font-black border-4 border-slate-400 shadow-lg"
-          >
-            元の画面にもどす
+            <span aria-hidden="true">⏹</span>
+            <span>呼び出しを停止する</span>
           </button>
         </div>
       </div>
     </section>
 
     <!-- *******************************************************
-         タブ2：2. 希望を伝える
+         タブ2：2. 希望を伝える（左端の縦線を揃えたカードレイアウト）
          ******************************************************* -->
     <section
       id="panel-2"
@@ -193,153 +193,199 @@
       aria-labelledby="tab-btn-2"
       class="hidden flex-1 flex flex-col justify-between space-y-5"
     >
-      <!-- 最上部：店員さんへの丁寧なメッセージ（左揃えで視認性最大化） -->
-      <div class="w-full p-5 sm:p-6 rounded-3xl bg-[#facc15] text-black border-4 border-white shadow-xl text-left">
-        <p class="text-2xl sm:text-4xl font-black leading-snug tracking-tight">
-          ⭐️ 付き添っていただけると幸いです。
-        </p>
-      </div>
-
-      <!-- 店員さんに見せる大きなまとめカード＆読み上げボタン -->
-      <div class="w-full p-5 sm:p-7 rounded-3xl bg-slate-900 border-4 border-[#a3e635] shadow-xl space-y-4">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 text-left">
-          <div class="p-4 rounded-2xl bg-black/70 border-2 border-slate-600">
-            <div class="text-base sm:text-lg font-bold text-[#facc15]">レジ袋</div>
-            <div id="summary-bags" class="text-2xl sm:text-3xl font-black text-white mt-1">不要 (0枚)</div>
+      <!-- 1. 付き添い希望トグル選択カード（左端揃え） -->
+      <button
+        id="escort-toggle-card"
+        type="button"
+        role="switch"
+        aria-checked="true"
+        onclick="toggleEscortRequest()"
+        class="btn-tactile w-full p-5 sm:p-6 rounded-3xl border-4 transition-colors text-left flex items-center justify-between gap-4 shadow-xl bg-[#facc15] text-black border-white"
+      >
+        <div class="space-y-1">
+          <div class="text-2xl sm:text-4xl font-black leading-snug tracking-tight">
+            ⭐️ 付き添っていただけると幸いです。
           </div>
-          <div class="p-4 rounded-2xl bg-black/70 border-2 border-slate-600">
-            <div class="text-base sm:text-lg font-bold text-[#facc15]">お支払い方法</div>
-            <div id="summary-payment" class="text-2xl sm:text-3xl font-black text-[#a3e635] mt-1">現金</div>
-          </div>
-          <div class="p-4 rounded-2xl bg-black/70 border-2 border-slate-600">
-            <div class="text-base sm:text-lg font-bold text-[#facc15]">お釣り・レシート</div>
-            <div id="summary-change" class="text-2xl sm:text-3xl font-black text-white mt-1">お釣りは手渡し希望</div>
+          <div id="escort-status-label" class="text-lg sm:text-xl font-black">
+            状態：ON（店員さんに付き添いを希望する）
           </div>
         </div>
+        <span id="escort-badge" class="shrink-0 px-4 py-2 rounded-2xl bg-black text-[#84cc16] text-xl sm:text-2xl font-black">
+          希望する
+        </span>
+      </button>
 
+      <!-- 2. レジ袋の枚数選択カード（左端揃え） -->
+      <div class="w-full p-5 sm:p-6 rounded-3xl bg-slate-900/95 border-4 border-slate-600 space-y-3 text-left">
+        <h2 class="text-xl sm:text-2xl font-black text-[#facc15]">レジ袋の枚数</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" role="radiogroup" aria-label="レジ袋の枚数">
+          <button type="button" data-bag="0枚" onclick="selectBag('0枚')" class="bag-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors">0枚</button>
+          <button type="button" data-bag="1枚" onclick="selectBag('1枚')" class="bag-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors">1枚</button>
+          <button type="button" data-bag="2枚" onclick="selectBag('2枚')" class="bag-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors">2枚</button>
+          <button type="button" data-bag="3枚" onclick="selectBag('3枚')" class="bag-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors">3枚</button>
+        </div>
+      </div>
+
+      <!-- 3. 支払い方法選択カード（左端揃え） -->
+      <div class="w-full p-5 sm:p-6 rounded-3xl bg-slate-900/95 border-4 border-slate-600 space-y-3 text-left">
+        <h2 class="text-xl sm:text-2xl font-black text-[#facc15]">お支払い方法</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" role="radiogroup" aria-label="お支払い方法">
+          <button type="button" data-pay="現金" onclick="selectPayment('現金')" class="pay-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors">現金</button>
+          <button type="button" data-pay="クレジットカード" onclick="selectPayment('クレジットカード')" class="pay-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors">クレジットカード</button>
+          <button type="button" data-pay="電子マネー" onclick="selectPayment('電子マネー')" class="pay-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors">電子マネー</button>
+          <button type="button" data-pay="バーコード決済" onclick="selectPayment('バーコード決済')" class="pay-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors">バーコード決済</button>
+        </div>
+      </div>
+
+      <!-- 4. 現在の選択まとめ＆「🔊 音声で伝える」ボタン -->
+      <div class="w-full p-5 sm:p-6 rounded-3xl bg-slate-900 border-4 border-[#84cc16] space-y-4 text-left shadow-xl">
+        <div class="text-lg sm:text-2xl font-bold text-white leading-relaxed" id="preference-summary-text">
+          付き添い希望：あり ／ レジ袋：0枚 ／ お支払い：現金
+        </div>
         <button
           type="button"
           onclick="speakPreferences()"
-          class="btn-tactile w-full min-h-[68px] py-4 px-6 rounded-2xl bg-[#a3e635] hover:bg-[#bef264] text-black text-2xl sm:text-3xl font-black border-4 border-white shadow-lg flex items-center justify-center gap-3"
+          class="btn-tactile w-full min-h-[72px] py-4 px-6 rounded-2xl bg-[#84cc16] hover:bg-[#a3e635] text-black text-2xl sm:text-3xl font-black border-4 border-white shadow-lg flex items-center justify-center gap-3"
         >
           <span aria-hidden="true">🔊</span>
-          <span>希望を音声で読み上げる</span>
+          <span>音声で伝える</span>
         </button>
-      </div>
-
-      <!-- 希望の選択ボタン群（localStorageに自動保存） -->
-      <div class="space-y-4">
-        <!-- 1. レジ袋 -->
-        <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border-2 border-slate-600 space-y-3">
-          <h2 class="text-xl sm:text-2xl font-black text-[#facc15]">レジ袋の枚数</h2>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3" role="radiogroup" aria-label="レジ袋の枚数">
-            <button type="button" data-bag="不要 (0枚)" onclick="selectBag('不要 (0枚)')" class="bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">不要 (0枚)</button>
-            <button type="button" data-bag="1枚" onclick="selectBag('1枚')" class="bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">1枚</button>
-            <button type="button" data-bag="2枚" onclick="selectBag('2枚')" class="bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">2枚</button>
-            <button type="button" data-bag="3枚" onclick="selectBag('3枚')" class="bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">3枚</button>
-          </div>
-        </div>
-
-        <!-- 2. お支払い方法 -->
-        <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border-2 border-slate-600 space-y-3">
-          <h2 class="text-xl sm:text-2xl font-black text-[#facc15]">お支払い方法</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3" role="radiogroup" aria-label="お支払い方法">
-            <button type="button" data-pay="現金" onclick="selectPayment('現金')" class="pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">現金</button>
-            <button type="button" data-pay="カード" onclick="selectPayment('カード')" class="pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">カード</button>
-            <button type="button" data-pay="電子マネー・QR" onclick="selectPayment('電子マネー・QR')" class="pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">電子マネー・QR</button>
-          </div>
-        </div>
-
-        <!-- 3. お釣り・レシート -->
-        <div class="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border-2 border-slate-600 space-y-3">
-          <h2 class="text-xl sm:text-2xl font-black text-[#facc15]">お釣り・レシートの受け取り</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3" role="radiogroup" aria-label="お釣り・レシートの受け取り">
-            <button type="button" data-change="お釣りは手渡し希望" onclick="selectChange('お釣りは手渡し希望')" class="change-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">お釣りは手渡し希望</button>
-            <button type="button" data-change="通常通り" onclick="selectChange('通常通り')" class="change-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors">通常通り</button>
-          </div>
-        </div>
       </div>
     </section>
 
     <!-- *******************************************************
-         タブ3：3. 徒歩ナビ(地図)
+         タブ3：3. 徒歩ナビ（複数候補検索修正・アプリ優先起動・よく行く場所登録）
          ******************************************************* -->
     <section
       id="panel-3"
       role="tabpanel"
       aria-labelledby="tab-btn-3"
-      class="hidden flex-1 flex flex-col justify-center space-y-5"
+      class="hidden flex-1 flex flex-col justify-between space-y-5"
     >
-      <div class="p-5 sm:p-7 rounded-3xl bg-slate-900 border-4 border-[#a3e635] space-y-3">
-        <h1 class="text-2xl sm:text-4xl font-black text-[#a3e635]">
-          🗺️ Googleマップ 徒歩音声ナビ
-        </h1>
-        <p class="text-lg sm:text-2xl font-bold text-white leading-relaxed">
-          ボタンを押すとGoogleマップの徒歩モードが起動し、音声案内で目的地まで誘導します。
+      <!-- 最上部：保存済み「よく行く場所（マイ目的地）」ワンタップ起動カード -->
+      <div id="favorite-launch-card" class="hidden w-full p-5 sm:p-6 rounded-3xl bg-[#84cc16] text-black border-4 border-white shadow-2xl space-y-3 text-left">
+        <div class="flex items-center justify-between gap-2">
+          <span class="px-3 py-1 rounded-xl bg-black text-[#facc15] text-base sm:text-lg font-black">
+            登録済みのマイ目的地
+          </span>
+          <span id="favorite-address-badge" class="text-base sm:text-xl font-black truncate max-w-[65%]"></span>
+        </div>
+        <button
+          id="favorite-launch-btn"
+          type="button"
+          onclick="launchFavoritePlaceNav()"
+          class="btn-tactile w-full min-h-[76px] p-4 rounded-2xl bg-black hover:bg-slate-900 text-[#facc15] text-2xl sm:text-3xl font-black border-4 border-white shadow-lg flex items-center justify-center gap-3 text-center leading-snug"
+        >
+          <span>🚶 よく行く場所へ徒歩ナビ</span>
+        </button>
+      </div>
+
+      <!-- よく行く場所（マイ目的地）の登録・編集カード -->
+      <div class="w-full p-5 sm:p-6 rounded-3xl bg-slate-900 border-4 border-[#facc15] space-y-4 text-left">
+        <h2 class="text-xl sm:text-3xl font-black text-[#facc15]">
+          ⭐ よく行く場所（マイ目的地）の登録
+        </h2>
+        <p class="text-base sm:text-xl font-bold text-slate-200">
+          よく使うスーパーや病院を登録しておくと、ボタン1回や「いつものスーパー」の音声でピンポイント案内できます。
         </p>
-      </div>
 
-      <!-- プリセット目的地ボタン -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label for="fav-name-input" class="block text-base sm:text-lg font-black text-white">
+              呼び名（例：いつものスーパー）
+            </label>
+            <input
+              id="fav-name-input"
+              type="text"
+              placeholder="例：いつものスーパー"
+              class="w-full min-h-[58px] px-4 py-2 rounded-2xl bg-black text-white text-lg sm:text-xl font-bold border-4 border-slate-500 focus:border-[#84cc16] focus:outline-none"
+            />
+          </div>
+
+          <div class="space-y-1">
+            <label for="fav-place-input" class="block text-base sm:text-lg font-black text-white">
+              店舗名・住所（例：マルナカ 志度店）
+            </label>
+            <input
+              id="fav-place-input"
+              type="text"
+              placeholder="例：マルナカ 志度店"
+              class="w-full min-h-[58px] px-4 py-2 rounded-2xl bg-black text-white text-lg sm:text-xl font-bold border-4 border-slate-500 focus:border-[#84cc16] focus:outline-none"
+            />
+          </div>
+        </div>
+
         <button
           type="button"
-          onclick="setPresetDestination('近くのスーパー')"
-          class="btn-tactile min-h-[76px] p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-2xl sm:text-3xl font-black border-4 border-[#facc15] shadow-lg flex items-center justify-center gap-2"
+          onclick="saveFavoritePlace()"
+          class="btn-tactile w-full min-h-[64px] py-3 px-6 rounded-2xl bg-[#facc15] hover:bg-yellow-300 text-black text-xl sm:text-2xl font-black border-4 border-white shadow-lg flex items-center justify-center gap-2"
         >
-          <span>🏪 近くのスーパーへ行く</span>
-        </button>
-
-        <button
-          type="button"
-          onclick="handleGoHomePreset()"
-          class="btn-tactile min-h-[76px] p-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-2xl sm:text-3xl font-black border-4 border-[#facc15] shadow-lg flex items-center justify-center gap-2"
-        >
-          <span>🏠 自宅へ帰る</span>
+          <span>💾 よく行く場所を保存</span>
         </button>
       </div>
 
-      <!-- 目的地入力＆音声入力 -->
-      <div class="p-5 sm:p-6 rounded-3xl bg-slate-900 border-4 border-slate-600 space-y-3">
-        <label for="destination-input" class="block text-xl sm:text-2xl font-black text-[#facc15]">
-          目的地（自宅の住所・駅名・お店の名前）
-        </label>
+      <!-- 目的地検索＆周辺検索プリセット -->
+      <div class="w-full p-5 sm:p-6 rounded-3xl bg-slate-900 border-4 border-slate-600 space-y-4 text-left">
+        <h2 class="text-xl sm:text-2xl font-black text-[#84cc16]">
+          🗺️ 目的地を指定して徒歩ナビ・周辺検索
+        </h2>
+
+        <!-- 周辺検索ワンタップボタン（複数候補が出ても左パネルが空白にならない周辺検索モードを使用） -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <button
+            type="button"
+            onclick="startNavigationToQuery('近くのスーパー')"
+            class="btn-tactile min-h-[62px] px-3 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-lg sm:text-xl font-black border-4 border-[#84cc16]"
+          >
+            🏪 近くのスーパー
+          </button>
+          <button
+            type="button"
+            onclick="startNavigationToQuery('近くのコンビニ')"
+            class="btn-tactile min-h-[62px] px-3 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-lg sm:text-xl font-black border-4 border-[#84cc16]"
+          >
+            🏬 近くのコンビニ
+          </button>
+          <button
+            type="button"
+            onclick="startNavigationToQuery('近くの薬局')"
+            class="btn-tactile min-h-[62px] px-3 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white text-lg sm:text-xl font-black border-4 border-[#84cc16]"
+          >
+            💊 近くの薬局
+          </button>
+        </div>
+
+        <!-- 自由入力欄 -->
         <div class="flex flex-col sm:flex-row gap-3">
           <input
             id="destination-input"
             type="text"
-            placeholder="例：近くのスーパー / 自宅の住所"
-            class="flex-1 min-h-[64px] px-4 py-3 rounded-2xl bg-black text-white text-xl sm:text-2xl font-bold border-4 border-slate-500 focus:border-[#a3e635] focus:outline-none"
+            placeholder="例：マルナカ 志度店 / 近くのスーパー"
+            class="flex-1 min-h-[62px] px-4 py-3 rounded-2xl bg-black text-white text-xl sm:text-2xl font-bold border-4 border-slate-500 focus:border-[#84cc16] focus:outline-none"
           />
           <button
             type="button"
-            onclick="startVoiceDestinationInput()"
-            class="btn-tactile min-h-[64px] px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-[#facc15] text-xl sm:text-2xl font-black border-4 border-[#facc15] shrink-0"
+            onclick="startNavigationFromInput()"
+            class="btn-tactile min-h-[62px] px-6 py-3 rounded-2xl bg-[#84cc16] hover:bg-[#a3e635] text-black text-xl sm:text-2xl font-black border-4 border-white shrink-0"
           >
-            🎤 声で目的地を入力
+            🚶 徒歩ナビ開始
           </button>
         </div>
-      </div>
 
-      <!-- Googleマップ起動ボタン＆直接リンク -->
-      <div class="space-y-3">
-        <button
-          type="button"
-          onclick="openGoogleMapsWalking()"
-          class="btn-tactile w-full min-h-[84px] p-5 rounded-3xl bg-[#a3e635] hover:bg-[#bef264] text-black text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl flex items-center justify-center gap-3"
-        >
-          <span>🗺️ Googleマップで徒歩ナビ開始</span>
-        </button>
-
-        <div class="text-center pt-1">
+        <!-- 外部ブラウザ・Googleマップアプリ直接起動リンク（簡易ブラウザ回避用） -->
+        <div class="pt-1 flex flex-col sm:flex-row items-center justify-between gap-3">
           <a
             id="direct-maps-link"
-            href="https://www.google.com/maps/dir/?api=1&destination=%E8%BF%91%E3%81%8F%E3%81%AE%E3%82%B9%E3%83%BC%E3%83%91%E3%83%BC&travelmode=walking"
+            href="https://www.google.com/maps/search/?api=1&query=%E8%BF%91%E3%81%8F%E3%81%AE%E3%82%B9%E3%83%BC%E3%83%91%E3%83%BC"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-block px-5 py-2.5 rounded-xl bg-slate-800 text-[#facc15] underline text-lg sm:text-xl font-bold border-2 border-slate-600 hover:border-[#facc15]"
+            class="btn-tactile w-full sm:w-auto text-center px-6 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-[#facc15] text-lg sm:text-xl font-black border-4 border-[#facc15] shadow-md"
           >
-            別タブでGoogleマップを直接開く（テスト用リンク）
+            📲 マップアプリで開く
           </a>
+          <span id="nav-mode-indicator" class="text-sm sm:text-base font-bold text-slate-300">
+            モード：周辺検索一覧表示（近くのスーパー）
+          </span>
         </div>
       </div>
     </section>
@@ -347,7 +393,7 @@
   </main>
 
   <!-- =========================================================
-       下部コントロールバー：中央配置の大きな黄色ボタンのみ（右側の小文字なし）
+       下部コントロールバー：画面下部中央に大きく押しやすい「🎤 音声で操作する」ボタンのみ
        ========================================================= -->
   <footer class="w-full bg-[#090d16] border-t-4 border-[#facc15] px-4 py-3 sm:px-8 sm:py-4 shrink-0 z-20">
     <div class="max-w-5xl mx-auto">
@@ -356,7 +402,7 @@
         type="button"
         onclick="toggleVoiceRecognition()"
         aria-label="音声で操作する"
-        class="btn-tactile w-full min-h-[70px] sm:min-h-[80px] px-6 py-4 rounded-2xl bg-[#facc15] hover:bg-yellow-300 text-black text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl flex items-center justify-center gap-3 transition-colors"
+        class="btn-tactile w-full min-h-[72px] sm:min-h-[82px] px-6 py-4 rounded-2xl bg-[#facc15] hover:bg-yellow-300 text-black text-2xl sm:text-4xl font-black border-4 border-white shadow-2xl flex items-center justify-center gap-3 transition-colors"
       >
         <span id="voice-btn-icon" aria-hidden="true">🎤</span>
         <span id="voice-btn-text">音声で操作する</span>
@@ -365,64 +411,93 @@
   </footer>
 
   <!-- =========================================================
-       JavaScript：チャイム音・音声合成・音声認識・設定保存・マップ連携
+       JavaScript：チャイムループ・音声合成・音声認識・設定保存・マップ最適化
        ========================================================= -->
   <script>
     // --- localStorage 保存キー ---
     const KEYS = {
-      BAGS: 'sa_pref_bags_v1',
-      PAY: 'sa_pref_payment_v1',
-      CHANGE: 'sa_pref_change_v1',
-      HOME: 'sa_home_address_v1',
-      DEST: 'sa_last_dest_v1'
+      ESCORT: 'sa_pref_escort_v2',
+      BAGS: 'sa_pref_bags_v2',
+      PAY: 'sa_pref_payment_v2',
+      FAV_NAME: 'sa_fav_place_name_v2',
+      FAV_QUERY: 'sa_fav_place_query_v2',
+      LAST_DEST: 'sa_last_dest_v2'
     };
 
     // --- アプリの状態 ---
     let state = {
       activeTab: 1,
-      bags: '不要 (0枚)',
+      isCalling: false,
+      escort: true,
+      bags: '0枚',
       payment: '現金',
-      change: 'お釣りは手渡し希望',
-      homeAddress: '',
+      favName: '',
+      favQuery: '',
       destination: '近くのスーパー'
     };
+
+    let chimeLoopTimer = null;
+    let toastTimer = null;
 
     // --- 初期化処理 ---
     window.addEventListener('DOMContentLoaded', () => {
       loadPreferences();
       updatePreferenceUI();
-      updateMapsLink();
+      updateFavoriteUI();
+      updateMapsDirectLink(state.destination);
     });
 
     function loadPreferences() {
       try {
+        const savedEscort = localStorage.getItem(KEYS.ESCORT);
         const savedBags = localStorage.getItem(KEYS.BAGS);
         const savedPay = localStorage.getItem(KEYS.PAY);
-        const savedChange = localStorage.getItem(KEYS.CHANGE);
-        const savedHome = localStorage.getItem(KEYS.HOME);
-        const savedDest = localStorage.getItem(KEYS.DEST);
+        const savedFavName = localStorage.getItem(KEYS.FAV_NAME);
+        const savedFavQuery = localStorage.getItem(KEYS.FAV_QUERY);
+        const savedDest = localStorage.getItem(KEYS.LAST_DEST);
 
+        if (savedEscort !== null) state.escort = (savedEscort === 'true');
         if (savedBags) state.bags = savedBags;
         if (savedPay) state.payment = savedPay;
-        if (savedChange) state.change = savedChange;
-        if (savedHome) state.homeAddress = savedHome;
+        if (savedFavName) state.favName = savedFavName;
+        if (savedFavQuery) state.favQuery = savedFavQuery;
         if (savedDest) state.destination = savedDest;
 
+        const favNameInput = document.getElementById('fav-name-input');
+        const favPlaceInput = document.getElementById('fav-place-input');
         const destInput = document.getElementById('destination-input');
+
+        if (favNameInput && state.favName) favNameInput.value = state.favName;
+        if (favPlaceInput && state.favQuery) favPlaceInput.value = state.favQuery;
         if (destInput) {
           destInput.value = state.destination;
           destInput.addEventListener('input', (e) => {
             state.destination = e.target.value;
-            localStorage.setItem(KEYS.DEST, state.destination);
-            updateMapsLink();
+            localStorage.setItem(KEYS.LAST_DEST, state.destination);
+            updateMapsDirectLink(state.destination);
           });
         }
       } catch (e) {
-        console.warn('localStorageの読み込みに失敗しました:', e);
+        console.warn('localStorage読み込みエラー:', e);
       }
     }
 
-    // --- 音声読み上げ（SpeechSynthesis API） ---
+    // --- トースト通知（alert()不使用） ---
+    function showToast(message) {
+      const banner = document.getElementById('toast-banner');
+      const textEl = document.getElementById('toast-text');
+      if (!banner || !textEl) return;
+
+      textEl.textContent = message;
+      banner.classList.remove('hidden');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 3500);
+    }
+
+    // --- 日本語音声合成（SpeechSynthesis API） ---
     function speakText(text) {
       const srLive = document.getElementById('sr-live');
       if (srLive) srLive.textContent = text;
@@ -432,12 +507,12 @@
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(text);
         utter.lang = 'ja-JP';
-        utter.rate = 0.95;
+        utter.rate = 0.96;
         utter.pitch = 1.0;
         utter.volume = 1.0;
         window.speechSynthesis.speak(utter);
       } catch (e) {
-        console.warn('音声合成エラー:', e);
+        console.warn('音声読み上げエラー:', e);
       }
     }
 
@@ -463,18 +538,20 @@
 
       if (announce) {
         const messages = {
-          1: '1番、店員呼び出し画面です。画面のどこかをタッチするとチャイムが鳴ります。',
+          1: '1番、店員呼び出し画面です。',
           2: '2番、希望を伝える画面です。',
-          3: '3番、徒歩ナビ地図画面です。'
+          3: '3番、徒歩ナビ画面です。'
         };
         speakText(messages[tabNumber]);
       }
     }
 
-    // --- Web Audio API：3連チャイム（1046.5Hz C6 -> 1318.5Hz E6 -> 1046.5Hz C6） ---
+    // =========================================================
+    // タブ1：Web Audio API 3連チャイム（1046.5Hz〜1318.5Hz）ループ鳴動
+    // =========================================================
     let audioCtx = null;
 
-    function playThreeChimes() {
+    function playThreeChimeBurst() {
       try {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) return;
@@ -486,34 +563,33 @@
           audioCtx.resume();
         }
 
-        // 騒がしい店内でもクリアに聞こえる約75-80dB相当のコンプレッサー＆ゲイン設定
         const compressor = audioCtx.createDynamicsCompressor();
-        compressor.threshold.setValueAtTime(-14, audioCtx.currentTime);
+        compressor.threshold.setValueAtTime(-12, audioCtx.currentTime);
         compressor.knee.setValueAtTime(10, audioCtx.currentTime);
         compressor.ratio.setValueAtTime(6, audioCtx.currentTime);
         compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
         compressor.release.setValueAtTime(0.15, audioCtx.currentTime);
 
         const masterGain = audioCtx.createGain();
-        masterGain.gain.setValueAtTime(1.6, audioCtx.currentTime);
+        masterGain.gain.setValueAtTime(1.65, audioCtx.currentTime);
 
         compressor.connect(masterGain);
         masterGain.connect(audioCtx.destination);
 
         const now = audioCtx.currentTime;
-        // 3回チャイムを鳴らす（各回: C6 1046.5Hz -> E6 1318.5Hz -> C6 1046.5Hz）
+        // 聞き取りやすい高音域の3連チャイム（C6 1046.5Hz -> E6 1318.5Hz -> C6 1046.5Hz）× 3連
         for (let repeat = 0; repeat < 3; repeat++) {
-          const base = now + repeat * 1.15;
-          playTone(compressor, 1046.5, base, 0.25);        // C6
-          playTone(compressor, 1318.5, base + 0.26, 0.25); // E6
-          playTone(compressor, 1046.5, base + 0.52, 0.48); // C6（余韻長め）
+          const base = now + repeat * 1.1;
+          playChimeNote(compressor, 1046.5, base, 0.24);
+          playChimeNote(compressor, 1318.5, base + 0.25, 0.24);
+          playChimeNote(compressor, 1046.5, base + 0.50, 0.46);
         }
       } catch (e) {
         console.warn('チャイム再生エラー:', e);
       }
     }
 
-    function playTone(destinationNode, freq, startTime, duration) {
+    function playChimeNote(destinationNode, freq, startTime, duration) {
       const oscMain = audioCtx.createOscillator();
       const oscHarmonic = audioCtx.createOscillator();
       const noteGain = audioCtx.createGain();
@@ -522,10 +598,9 @@
       oscMain.type = 'triangle';
       oscMain.frequency.setValueAtTime(freq, startTime);
 
-      // 聞き取りやすさを高めるオクターブ上の倍音
       oscHarmonic.type = 'sine';
       oscHarmonic.frequency.setValueAtTime(freq * 2, startTime);
-      harmGain.gain.setValueAtTime(0.25, startTime);
+      harmGain.gain.setValueAtTime(0.28, startTime);
 
       noteGain.gain.setValueAtTime(0.001, startTime);
       noteGain.gain.exponentialRampToValueAtTime(0.95, startTime + 0.02);
@@ -542,46 +617,76 @@
       oscHarmonic.stop(startTime + duration + 0.02);
     }
 
-    // --- 店員呼び出しトリガー ---
-    function triggerStaffCall() {
+    function startStaffCall() {
       if (state.activeTab !== 1) {
         switchTab(1, false);
       }
 
-      // 3連チャイム再生
-      playThreeChimes();
+      state.isCalling = true;
 
-      // バイブレーション（対応端末）
-      if ('vibrate' in navigator) {
-        try {
-          navigator.vibrate([250, 150, 250, 150, 400]);
-        } catch (e) {}
-      }
+      // 画面全体のライムグリーン点滅開始
+      document.body.classList.add('alert-flashing');
 
-      // 画面点滅（ライムグリーンとイエロー）
-      const bodyEl = document.body;
-      bodyEl.classList.remove('alert-flashing');
-      void bodyEl.offsetWidth; // リフローでアニメーション再起動
-      bodyEl.classList.add('alert-flashing');
-
-      // 店員向け視覚カード表示
+      // 表示切り替え
       document.getElementById('call-standby-view').classList.add('hidden');
       document.getElementById('call-active-view').classList.remove('hidden');
 
-      // チャイム終了後に音声案内
-      setTimeout(() => {
-        speakText('店員さんを呼び出しています。そのままお待ちください。');
-      }, 3600);
+      // 即座に1回目の3連チャイム＆バイブレーション実行
+      playThreeChimeBurst();
+      triggerVibration();
+
+      // 既存のループをクリアして4.2秒ごとにループ鳴動・振動
+      if (chimeLoopTimer) clearInterval(chimeLoopTimer);
+      chimeLoopTimer = setInterval(() => {
+        if (!state.isCalling) return;
+        playThreeChimeBurst();
+        triggerVibration();
+      }, 4200);
+
+      speakText('店員さんを呼び出しています。停止するときは画面下の停止ボタンを押すか、止める、と話してください。');
     }
 
-    function resetStaffCall() {
+    function stopStaffCall() {
+      state.isCalling = false;
+
+      if (chimeLoopTimer) {
+        clearInterval(chimeLoopTimer);
+        chimeLoopTimer = null;
+      }
+
+      if ('vibrate' in navigator) {
+        try {
+          navigator.vibrate(0);
+        } catch (e) {}
+      }
+
       document.body.classList.remove('alert-flashing');
       document.getElementById('call-active-view').classList.add('hidden');
       document.getElementById('call-standby-view').classList.remove('hidden');
-      speakText('元の呼び出し画面にもどりました。');
+
+      speakText('呼び出しを停止しました。');
     }
 
-    // --- タブ2：希望設定の更新＆保存 ---
+    function triggerVibration() {
+      if ('vibrate' in navigator) {
+        try {
+          navigator.vibrate([300, 150, 300, 150, 450]);
+        } catch (e) {}
+      }
+    }
+
+    // =========================================================
+    // タブ2：希望を伝える（localStorage自動保存＆音声読み上げ）
+    // =========================================================
+    function toggleEscortRequest() {
+      state.escort = !state.escort;
+      localStorage.setItem(KEYS.ESCORT, String(state.escort));
+      updatePreferenceUI();
+      speakText(state.escort
+        ? '付き添っていただけると幸いです、をオンにしました。'
+        : '付き添い希望をオフにしました。');
+    }
+
     function selectBag(value) {
       state.bags = value;
       localStorage.setItem(KEYS.BAGS, value);
@@ -596,104 +701,286 @@
       speakText(`お支払い方法、${value}に設定しました。`);
     }
 
-    function selectChange(value) {
-      state.change = value;
-      localStorage.setItem(KEYS.CHANGE, value);
-      updatePreferenceUI();
-      speakText(`お釣り・レシート、${value}に設定しました。`);
-    }
-
     function updatePreferenceUI() {
-      document.getElementById('summary-bags').textContent = state.bags;
-      document.getElementById('summary-payment').textContent = state.payment;
-      document.getElementById('summary-change').textContent = state.change;
+      // 付き添いトグルカード
+      const escortCard = document.getElementById('escort-toggle-card');
+      const escortStatus = document.getElementById('escort-status-label');
+      const escortBadge = document.getElementById('escort-badge');
 
-      // レジ袋ボタンの選択状態
+      if (escortCard && escortStatus && escortBadge) {
+        escortCard.setAttribute('aria-checked', String(state.escort));
+        if (state.escort) {
+          escortCard.className = 'btn-tactile w-full p-5 sm:p-6 rounded-3xl border-4 transition-colors text-left flex items-center justify-between gap-4 shadow-xl bg-[#facc15] text-black border-white';
+          escortStatus.textContent = '状態：ON（店員さんに付き添いを希望する）';
+          escortBadge.className = 'shrink-0 px-4 py-2 rounded-2xl bg-black text-[#84cc16] text-xl sm:text-2xl font-black';
+          escortBadge.textContent = '希望する';
+        } else {
+          escortCard.className = 'btn-tactile w-full p-5 sm:p-6 rounded-3xl border-4 transition-colors text-left flex items-center justify-between gap-4 shadow-xl bg-slate-900 text-white border-slate-500';
+          escortStatus.textContent = '状態：OFF（付き添い希望なし）';
+          escortBadge.className = 'shrink-0 px-4 py-2 rounded-2xl bg-slate-700 text-slate-200 text-xl sm:text-2xl font-black';
+          escortBadge.textContent = '希望しない';
+        }
+      }
+
+      // レジ袋ボタン
       document.querySelectorAll('.bag-option').forEach((btn) => {
         const isSelected = btn.getAttribute('data-bag') === state.bags;
         btn.className = isSelected
-          ? 'bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-[#facc15] text-black border-white'
-          : 'bag-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-slate-800 text-white border-slate-500';
+          ? 'bag-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors bg-[#facc15] text-black border-white'
+          : 'bag-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors bg-slate-800 text-white border-slate-500';
       });
 
-      // 支払いボタンの選択状態
+      // 支払いボタン
       document.querySelectorAll('.pay-option').forEach((btn) => {
         const isSelected = btn.getAttribute('data-pay') === state.payment;
         btn.className = isSelected
-          ? 'pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-[#facc15] text-black border-white'
-          : 'pay-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-slate-800 text-white border-slate-500';
+          ? 'pay-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors bg-[#facc15] text-black border-white'
+          : 'pay-option btn-tactile min-h-[62px] rounded-2xl text-xl sm:text-2xl font-black border-4 transition-colors bg-slate-800 text-white border-slate-500';
       });
 
-      // お釣りボタンの選択状態
-      document.querySelectorAll('.change-option').forEach((btn) => {
-        const isSelected = btn.getAttribute('data-change') === state.change;
-        btn.className = isSelected
-          ? 'change-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-[#facc15] text-black border-white'
-          : 'change-option btn-tactile min-h-[60px] rounded-xl text-xl sm:text-2xl font-black border-4 transition-colors bg-slate-800 text-white border-slate-500';
-      });
+      // まとめテキスト更新
+      const summaryEl = document.getElementById('preference-summary-text');
+      if (summaryEl) {
+        summaryEl.textContent = `付き添い希望：${state.escort ? 'あり' : 'なし'} ／ レジ袋：${state.bags} ／ お支払い：${state.payment}`;
+      }
     }
 
     function speakPreferences() {
-      const text = `付き添っていただけると幸いです。レジ袋は、${state.bags}。お支払い方法は、${state.payment}。お釣り・レシートは、${state.change}です。よろしくお願いいたします。`;
-      speakText(text);
+      const escortSentence = state.escort ? '付き添っていただけると幸いです。' : '';
+      const bagSentence = state.bags === '0枚' ? 'レジ袋は不要です。' : `レジ袋は、${state.bags}お願いします。`;
+      const paySentence = `お支払い方法は、${state.payment}です。よろしくお願いいたします。`;
+      speakText(`${escortSentence}${bagSentence}${paySentence}`);
     }
 
-    // --- タブ3：徒歩ナビ（Googleマップ連携） ---
-    function setPresetDestination(dest) {
-      state.destination = dest;
-      const input = document.getElementById('destination-input');
-      if (input) input.value = dest;
-      localStorage.setItem(KEYS.DEST, dest);
-      updateMapsLink();
-      speakText(`目的地を、${dest}、に設定しました。`);
+    // =========================================================
+    // タブ3：徒歩ナビ（複数候補検索の修正＆アプリ優先起動＆よく行く場所登録）
+    // =========================================================
+
+    /**
+     * 複数候補が存在する一般的な検索ワードかどうかを判定する
+     * （例：「近くのスーパー」「近くのコンビニ」「近くの薬局」「スーパー」「コンビニ」など）
+     */
+    function isMultiCandidateSearchQuery(query) {
+      const normalized = query.trim().replace(/\s+/g, '');
+      const genericKeywords = [
+        '近くのスーパー',
+        '近くのコンビニ',
+        '近くの薬局',
+        '近くのドラッグストア',
+        '近くの駅',
+        '近くの銀行',
+        '近くの病院',
+        'スーパー',
+        'コンビニ',
+        '薬局',
+        'ドラッグストア'
+      ];
+      return genericKeywords.includes(normalized) || normalized.startsWith('近くの');
     }
 
-    function handleGoHomePreset() {
-      const input = document.getElementById('destination-input');
-      const currentVal = input ? input.value.trim() : '';
+    /**
+     * Googleマップ用の最適なWeb URLを生成する
+     * - 複数候補検索：https://www.google.com/maps/search/?api=1&query=...（左パネルに一覧を正しく表示）
+     * - ピンポイント目的地：https://www.google.com/maps/dir/?api=1&destination=...&travelmode=walking
+     */
+    function buildOptimalGoogleMapsWebUrl(query, forcePinpoint = false) {
+      const cleanQuery = (query || '近くのスーパー').trim();
+      const encoded = encodeURIComponent(cleanQuery);
 
-      // 既に自宅住所が保存されていればそれを使う
-      if (state.homeAddress) {
-        setPresetDestination(state.homeAddress);
-      } else if (currentVal && currentVal !== '近くのスーパー') {
-        state.homeAddress = currentVal;
-        localStorage.setItem(KEYS.HOME, currentVal);
-        setPresetDestination(currentVal);
-      } else {
-        setPresetDestination('自宅');
-        speakText('自宅へ帰るに設定しました。具体的な住所や最寄り駅を入力しておくとより正確に案内できます。');
+      if (!forcePinpoint && isMultiCandidateSearchQuery(cleanQuery)) {
+        return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+      }
+      return `https://www.google.com/maps/dir/?api=1&destination=${encoded}&travelmode=walking`;
+    }
+
+    /**
+     * iOS/iPadOS用のGoogleマップネイティブアプリ起動URL（comgooglemaps://）を生成
+     */
+    function buildGoogleMapsAppSchemeUrl(query, forcePinpoint = false) {
+      const cleanQuery = (query || '近くのスーパー').trim();
+      const encoded = encodeURIComponent(cleanQuery);
+
+      if (!forcePinpoint && isMultiCandidateSearchQuery(cleanQuery)) {
+        return `comgooglemaps://?q=${encoded}`;
+      }
+      return `comgooglemaps://?daddr=${encoded}&directionsmode=walking`;
+    }
+
+    function isIOSorIPadOS() {
+      const ua = navigator.userAgent || '';
+      const isAppleMobile = /iPhone|iPad|iPod/.test(ua);
+      // iPadOS 13以降はMacintosh表記＋マルチタッチになるため判定を追加
+      const isIPadDesktopMode = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      return isAppleMobile || isIPadDesktopMode;
+    }
+
+    function updateMapsDirectLink(query, forcePinpoint = false) {
+      const cleanQuery = (query || '近くのスーパー').trim();
+      const webUrl = buildOptimalGoogleMapsWebUrl(cleanQuery, forcePinpoint);
+      const isPinpoint = forcePinpoint || !isMultiCandidateSearchQuery(cleanQuery);
+
+      const directLink = document.getElementById('direct-maps-link');
+      if (directLink) {
+        directLink.href = webUrl;
+      }
+
+      const indicator = document.getElementById('nav-mode-indicator');
+      if (indicator) {
+        indicator.textContent = isPinpoint
+          ? `モード：ピンポイント徒歩経路案内（${cleanQuery}）`
+          : `モード：周辺検索一覧表示（${cleanQuery}）`;
       }
     }
 
-    function getGoogleMapsWalkingUrl() {
-      const input = document.getElementById('destination-input');
-      const dest = (input && input.value.trim()) ? input.value.trim() : '近くのスーパー';
-      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=walking`;
-    }
+    /**
+     * Googleマップを起動する共通関数
+     * iOS/iPadOSの場合はGoogleマップアプリ（comgooglemaps://）を優先試行し、
+     * 未インストール時やその他OSでは外部ブラウザ/新規タブ（_blank）へフォールバックする
+     */
+    function openGoogleMapsOptimized(query, forcePinpoint = false, customAnnounce = '') {
+      const cleanQuery = (query || '近くのスーパー').trim();
+      state.destination = cleanQuery;
+      localStorage.setItem(KEYS.LAST_DEST, cleanQuery);
 
-    function updateMapsLink() {
-      const linkEl = document.getElementById('direct-maps-link');
-      if (linkEl) {
-        linkEl.href = getGoogleMapsWalkingUrl();
-      }
-    }
+      const destInput = document.getElementById('destination-input');
+      if (destInput) destInput.value = cleanQuery;
 
-    function openGoogleMapsWalking() {
-      const input = document.getElementById('destination-input');
-      const dest = (input && input.value.trim()) ? input.value.trim() : '近くのスーパー';
-      const url = getGoogleMapsWalkingUrl();
+      updateMapsDirectLink(cleanQuery, forcePinpoint);
 
-      speakText(`${dest}まで、Googleマップの徒歩ナビを開始します。`);
+      const webUrl = buildOptimalGoogleMapsWebUrl(cleanQuery, forcePinpoint);
+      const appUrl = buildGoogleMapsAppSchemeUrl(cleanQuery, forcePinpoint);
+      const isPinpoint = forcePinpoint || !isMultiCandidateSearchQuery(cleanQuery);
+
+      const announceMsg = customAnnounce || (isPinpoint
+        ? `${cleanQuery}まで、ピンポイントの徒歩ナビを開始します。`
+        : `${cleanQuery}の周辺一覧をGoogleマップで検索します。`);
+
+      speakText(announceMsg);
+      showToast(announceMsg);
+
       setTimeout(() => {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }, 500);
+        if (isIOSorIPadOS()) {
+          // まずGoogleマップアプリの起動を試みる
+          let appOpened = false;
+          const onVisibilityChange = () => {
+            if (document.hidden) {
+              appOpened = true;
+            }
+          };
+          document.addEventListener('visibilitychange', onVisibilityChange, { once: true });
+
+          window.location.href = appUrl;
+
+          // Googleマップアプリが未インストールで画面遷移しなかった場合、外部ブラウザ/新規タブで開く
+          setTimeout(() => {
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+            if (!appOpened && !document.hidden) {
+              const win = window.open(webUrl, '_blank', 'noopener,noreferrer');
+              if (!win) {
+                window.location.href = webUrl;
+              }
+            }
+          }, 900);
+        } else {
+          const win = window.open(webUrl, '_blank', 'noopener,noreferrer');
+          if (!win) {
+            window.location.href = webUrl;
+          }
+        }
+      }, 450);
     }
 
-    // --- 音声コマンド認識（Web Speech API） ---
+    function startNavigationToQuery(query) {
+      openGoogleMapsOptimized(query, false);
+    }
+
+    function startNavigationFromInput() {
+      const input = document.getElementById('destination-input');
+      const val = input ? input.value.trim() : '';
+      if (!val) {
+        speakText('目的地を入力するか、近くのスーパーボタンを押してください。');
+        showToast('目的地を入力してください');
+        return;
+      }
+      openGoogleMapsOptimized(val, false);
+    }
+
+    // --- よく行く場所（マイ目的地）の保存＆呼び出し ---
+    function saveFavoritePlace() {
+      const nameInput = document.getElementById('fav-name-input');
+      const placeInput = document.getElementById('fav-place-input');
+
+      const placeVal = placeInput ? placeInput.value.trim() : '';
+      const nameVal = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : 'いつものスーパー';
+
+      if (!placeVal) {
+        speakText('店舗名または住所を入力してから保存ボタンを押してください。');
+        showToast('店舗名・住所を入力してください');
+        return;
+      }
+
+      state.favName = nameVal;
+      state.favQuery = placeVal;
+
+      localStorage.setItem(KEYS.FAV_NAME, nameVal);
+      localStorage.setItem(KEYS.FAV_QUERY, placeVal);
+
+      updateFavoriteUI();
+      updateMapsDirectLink(placeVal, true);
+
+      const msg = `よく行く場所、${nameVal}（${placeVal}）を保存しました。`;
+      speakText(msg);
+      showToast(`✅ ${msg}`);
+    }
+
+    function updateFavoriteUI() {
+      const card = document.getElementById('favorite-launch-card');
+      const btn = document.getElementById('favorite-launch-btn');
+      const badge = document.getElementById('favorite-address-badge');
+
+      if (!card || !btn || !badge) return;
+
+      if (state.favQuery) {
+        card.classList.remove('hidden');
+        const labelName = state.favName || 'いつものスーパー';
+        badge.textContent = state.favQuery;
+        btn.innerHTML = `<span>🚶 よく行く場所へ徒歩ナビ（${escapeHtml(labelName)}）</span>`;
+      } else {
+        card.classList.add('hidden');
+      }
+    }
+
+    function launchFavoritePlaceNav() {
+      if (!state.favQuery) {
+        switchTab(3, false);
+        speakText('よく行く場所がまだ登録されていません。店舗名や住所を入力して保存してください。');
+        showToast('よく行く場所がまだ登録されていません');
+        return;
+      }
+      const labelName = state.favName || 'よく行く場所';
+      openGoogleMapsOptimized(
+        state.favQuery,
+        true,
+        `${labelName}、${state.favQuery}まで、ピンポイントの徒歩ナビを開始します。`
+      );
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[ch]));
+    }
+
+    // =========================================================
+    // 音声コマンド認識（Web Speech API）
+    // =========================================================
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let isListening = false;
-    let voiceInputTarget = 'command'; // 'command' | 'destination'
 
     if (SpeechRecognition) {
       recognition = new SpeechRecognition();
@@ -708,9 +995,7 @@
         const text = document.getElementById('voice-btn-text');
         btn.classList.add('mic-listening');
         icon.textContent = '🔴';
-        text.textContent = voiceInputTarget === 'destination'
-          ? '目的地をお話しください…'
-          : '聞き取り中… 話してください';
+        text.textContent = '聞き取り中… 話してください';
       };
 
       recognition.onend = () => {
@@ -721,7 +1006,6 @@
         btn.classList.remove('mic-listening');
         icon.textContent = '🎤';
         text.textContent = '音声で操作する';
-        voiceInputTarget = 'command';
       };
 
       recognition.onerror = (event) => {
@@ -733,19 +1017,6 @@
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript.trim();
-
-        if (voiceInputTarget === 'destination') {
-          const input = document.getElementById('destination-input');
-          if (input) input.value = transcript;
-          state.destination = transcript;
-          state.homeAddress = transcript;
-          localStorage.setItem(KEYS.DEST, transcript);
-          localStorage.setItem(KEYS.HOME, transcript);
-          updateMapsLink();
-          speakText(`目的地を、${transcript}、に設定しました。`);
-          return;
-        }
-
         processVoiceCommand(transcript);
       };
     }
@@ -753,12 +1024,12 @@
     function toggleVoiceRecognition() {
       if (!recognition) {
         speakText('このブラウザでは音声認識が利用できません。画面の大きなボタンで操作してください。');
+        showToast('このブラウザは音声認識に未対応です');
         return;
       }
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
-      voiceInputTarget = 'command';
       try {
         if (isListening) {
           recognition.stop();
@@ -766,120 +1037,127 @@
           recognition.start();
         }
       } catch (e) {
-        console.warn('音声認識の起動エラー:', e);
+        console.warn('音声認識起動エラー:', e);
       }
-    }
-
-    function startVoiceDestinationInput() {
-      if (!recognition) {
-        speakText('音声入力に対応していないため、入力欄に直接文字を入力してください。');
-        return;
-      }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-      voiceInputTarget = 'destination';
-      try {
-        if (isListening) recognition.stop();
-        recognition.start();
-      } catch (e) {}
     }
 
     function processVoiceCommand(raw) {
       const cmd = raw.replace(/\s+/g, '');
 
-      // 1. 店員呼び出し
-      if (cmd.includes('店員を呼ぶ') || cmd.includes('呼び出し') || cmd.includes('店員')) {
-        switchTab(1, false);
-        triggerStaffCall();
+      // 1. 呼び出し停止（「止める」「ストップ」「解除」）
+      if (cmd.includes('止め') || cmd.includes('ストップ') || cmd.includes('解除') || cmd.includes('停止')) {
+        stopStaffCall();
         return;
       }
 
-      // 2. 希望読み上げ
-      if (cmd.includes('希望') || cmd.includes('読み上げて') || cmd.includes('読み上げ')) {
-        switchTab(2, false);
-        speakPreferences();
+      // 2. 店員呼び出し（「店員を呼ぶ」「呼び出し」「助けて」）
+      if (cmd.includes('店員') || cmd.includes('呼び出し') || cmd.includes('助けて')) {
+        startStaffCall();
         return;
       }
 
-      // 3. レジ袋設定
-      if (cmd.includes('レジ袋0枚') || cmd.includes('ゼロ枚') || cmd.includes('0枚') || cmd.includes('不要')) {
+      // 3. レジ袋の枚数変更（「袋0枚」〜「袋3枚」）
+      if (cmd.includes('0枚') || cmd.includes('ゼロ枚') || cmd.includes('袋なし') || cmd.includes('袋不要')) {
         switchTab(2, false);
-        selectBag('不要 (0枚)');
+        selectBag('0枚');
         return;
       }
-      if (cmd.includes('レジ袋1枚') || cmd.includes('1枚') || cmd.includes('一枚')) {
+      if (cmd.includes('1枚') || cmd.includes('一枚')) {
         switchTab(2, false);
         selectBag('1枚');
         return;
       }
-      if (cmd.includes('レジ袋2枚') || cmd.includes('2枚') || cmd.includes('二枚')) {
+      if (cmd.includes('2枚') || cmd.includes('二枚')) {
         switchTab(2, false);
         selectBag('2枚');
         return;
       }
-      if (cmd.includes('レジ袋3枚') || cmd.includes('3枚') || cmd.includes('三枚')) {
+      if (cmd.includes('3枚') || cmd.includes('三枚')) {
         switchTab(2, false);
         selectBag('3枚');
         return;
       }
 
-      // 4. 支払い方法設定
+      // 4. 支払い方法変更（「現金で」「クレジットカード」「電子マネー」「バーコード決済」）
       if (cmd.includes('現金')) {
         switchTab(2, false);
         selectPayment('現金');
         return;
       }
-      if (cmd.includes('カード') || cmd.includes('クレジット')) {
+      if (cmd.includes('クレジット') || cmd.includes('カード')) {
         switchTab(2, false);
-        selectPayment('カード');
+        selectPayment('クレジットカード');
         return;
       }
-      if (cmd.includes('電子マネー') || cmd.includes('QR') || cmd.includes('ペイペイ')) {
+      if (cmd.includes('電子マネー')) {
         switchTab(2, false);
-        selectPayment('電子マネー・QR');
+        selectPayment('電子マネー');
+        return;
+      }
+      if (cmd.includes('バーコード') || cmd.includes('QR') || cmd.includes('ペイペイ')) {
+        switchTab(2, false);
+        selectPayment('バーコード決済');
         return;
       }
 
-      // 5. 地図・徒歩ナビ
-      if (cmd.includes('地図') || cmd.includes('ナビ') || cmd.includes('スーパー')) {
-        switchTab(3, false);
-        if (cmd.includes('スーパー')) {
-          setPresetDestination('近くのスーパー');
-        }
-        openGoogleMapsWalking();
-        return;
-      }
-
-      speakText(`「${raw}」と聞こえました。「店員を呼ぶ」「希望を読み上げて」「レジ袋1枚」「現金」「地図」のように話しかけてください。`);
-    }
-
-    // --- 物理ボタン（ボリュームキー等）ダブルプッシュのテスト用キーボードショートカット ---
-    let lastKeyTime = 0;
-    let lastKey = '';
-
-    window.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT') return;
-
-      const key = e.key;
-      const now = Date.now();
-
-      // 'v' キー単押し、または ArrowDown / ArrowUp を素早く2回押した場合
-      if (key === 'v' || key === 'V') {
-        e.preventDefault();
-        toggleVoiceRecognition();
-        return;
-      }
-
-      if ((key === 'ArrowDown' || key === 'ArrowUp') && key === lastKey && (now - lastKeyTime) < 500) {
-        e.preventDefault();
+      // 5. 希望を伝える・読み上げ
+      if (cmd.includes('希望') || cmd.includes('伝え') || cmd.includes('読み上げ')) {
+        switchTab(2, false);
         speakPreferences();
-        lastKeyTime = 0;
-      } else {
-        lastKey = key;
-        lastKeyTime = now;
+        return;
       }
-    });
+
+      // 6. 登録済みの「よく行く場所」「いつものスーパー」「いつものお店」
+      if (
+        cmd.includes('いつものスーパー') ||
+        cmd.includes('いつものお店') ||
+        cmd.includes('いつもの店') ||
+        cmd.includes('よく行く場所') ||
+        cmd.includes('マイ目的地')
+      ) {
+        switchTab(3, false);
+        launchFavoritePlaceNav();
+        return;
+      }
+
+      // 7. 「〇〇までナビ」「〇〇まで案内して」「近くのスーパー」「地図」
+      const navMatch = raw.match(/^(.+?)(?:まで|へ)?(?:徒歩)?(?:ナビ|案内|ルート|行き方|検索)(?:して|開始|お願い)?$/);
+      if (navMatch && navMatch[1]) {
+        const extractedDest = navMatch[1].trim();
+        if (extractedDest) {
+          switchTab(3, false);
+          openGoogleMapsOptimized(extractedDest, false);
+          return;
+        }
+      }
+
+      if (cmd.includes('近くのスーパー')) {
+        switchTab(3, false);
+        openGoogleMapsOptimized('近くのスーパー', false);
+        return;
+      }
+      if (cmd.includes('近くのコンビニ')) {
+        switchTab(3, false);
+        openGoogleMapsOptimized('近くのコンビニ', false);
+        return;
+      }
+      if (cmd.includes('近くの薬局')) {
+        switchTab(3, false);
+        openGoogleMapsOptimized('近くの薬局', false);
+        return;
+      }
+      if (cmd.includes('徒歩ナビ') || cmd.includes('ナビ') || cmd.includes('地図')) {
+        switchTab(3, false);
+        if (state.favQuery) {
+          launchFavoritePlaceNav();
+        } else {
+          openGoogleMapsOptimized(state.destination || '近くのスーパー', false);
+        }
+        return;
+      }
+
+      speakText(`「${raw}」と聞こえました。「店員を呼ぶ」「希望を伝える」「いつものスーパー」「近くのスーパー」「マルナカ志度店までナビ」のように話しかけてください。`);
+    }
   </script>
 </body>
 </html>
